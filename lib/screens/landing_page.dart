@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
 
 class LandingPage extends StatefulWidget {
   static const String routeName = '/landing_page';
@@ -24,9 +25,43 @@ class _LandingPageState extends State<LandingPage> {
     final pickedFile =
         await _imagePicker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
-      setState(() {
-        _image = File(pickedFile.path);
-      });
+      // call image cropper
+
+      File? croppedFile = await ImageCropper().cropImage(
+        sourcePath: pickedFile.path,
+        aspectRatioPresets: Platform.isAndroid
+            ? [
+                CropAspectRatioPreset.square,
+                CropAspectRatioPreset.ratio3x2,
+                CropAspectRatioPreset.original,
+                CropAspectRatioPreset.ratio4x3,
+                CropAspectRatioPreset.ratio16x9
+              ]
+            : [
+                CropAspectRatioPreset.original,
+                CropAspectRatioPreset.square,
+                CropAspectRatioPreset.ratio3x2,
+                CropAspectRatioPreset.ratio4x3,
+                CropAspectRatioPreset.ratio5x3,
+                CropAspectRatioPreset.ratio5x4,
+                CropAspectRatioPreset.ratio7x5,
+                CropAspectRatioPreset.ratio16x9
+              ],
+        androidUiSettings: AndroidUiSettings(
+            toolbarTitle: 'Crop Image',
+            toolbarColor: Colors.blue,
+            toolbarWidgetColor: Colors.white,
+            initAspectRatio: CropAspectRatioPreset.original,
+            lockAspectRatio: false),
+        iosUiSettings: IOSUiSettings(
+          title: 'Crop Image',
+        ),
+      );
+      if (croppedFile != null) {
+        setState(() {
+          _image = croppedFile;
+        });
+      }
     }
   }
 
@@ -50,11 +85,53 @@ class _LandingPageState extends State<LandingPage> {
               double.parse(decodedData['confidence'].toStringAsFixed(2)) * 100;
         });
         print('Image uploaded successfully');
+        _showResultDialog();
       } else {
         // Error occurred while uploading image
         print('Image upload failed');
       }
     }
+  }
+
+  void _showResultDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Disease Detection Result'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                'Disease detected:',
+              ),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  '$diseaseName',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Text(
+                'Confidence level:',
+              ),
+              Text(
+                '$confidenceLevel %',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: Text('Close'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -84,7 +161,10 @@ class _LandingPageState extends State<LandingPage> {
                     height: height * 0.5,
                     fit: BoxFit.contain,
                   )
-                : Text('No image selected.'),
+                : Text(
+                    'No image selected.\n Crop image to disease area for enhanced results.',
+                    textAlign: TextAlign.center,
+                  ),
             SizedBox(height: height * 0.02),
             ElevatedButton(
               onPressed: _selectImage,
@@ -95,12 +175,6 @@ class _LandingPageState extends State<LandingPage> {
               onPressed: _submitImage,
               child: Text('Submit Image'),
             ),
-            SizedBox(height: height * 0.02),
-            if (diseaseName != null && confidenceLevel != null)
-              Text(
-                'Disease detected: $diseaseName\nConfidence level: $confidenceLevel %',
-                textAlign: TextAlign.center,
-              ),
           ],
         ),
       ),
